@@ -83,10 +83,6 @@ func (c *cache) gc(ctx context.Context, t *time.Ticker) {
 func (c *cache) collect() ([]string, bool) {
 	exp := []string{}
 
-	if c.ttl == 0 {
-		return exp, false
-	}
-
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
