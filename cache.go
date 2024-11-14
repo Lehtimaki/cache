@@ -8,6 +8,7 @@ import (
 
 type Cache interface {
 	Put(string, []byte)
+	PutWithTTL(string, []byte, time.Duration)
 	Get(string) ([]byte, bool)
 	Del(string)
 }
@@ -22,6 +23,7 @@ type cache struct {
 type cell struct {
 	value []byte
 	ts    time.Time
+	ttl   time.Duration
 }
 
 func New(ctx context.Context, ttl time.Duration) Cache {
@@ -30,9 +32,7 @@ func New(ctx context.Context, ttl time.Duration) Cache {
 		store: map[string]cell{},
 	}
 
-	if c.ttl > 0 {
-		go c.gc(ctx, time.NewTicker(time.Second))
-	}
+	go c.gc(ctx, time.NewTicker(time.Second))
 
 	return &c
 }
@@ -44,6 +44,17 @@ func (c *cache) Put(k string, v []byte) {
 	c.store[k] = cell{
 		value: v,
 		ts:    time.Now(),
+	}
+}
+
+func (c *cache) PutWithTTL(k string, v []byte, t time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.store[k] = cell{
+		value: v,
+		ts:    time.Now(),
+		ttl:   t,
 	}
 }
 
@@ -88,7 +99,14 @@ func (c *cache) collect() ([]string, bool) {
 
 	now := time.Now()
 	for k, v := range c.store {
-		if now.Sub(v.ts) > c.ttl {
+		ttl := time.Duration(0)
+		if v.ttl != 0 {
+			ttl = v.ttl
+		} else {
+			ttl = c.ttl
+		}
+
+		if now.Sub(v.ts) > ttl {
 			exp = append(exp, k)
 		}
 	}

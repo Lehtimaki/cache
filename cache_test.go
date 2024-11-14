@@ -35,10 +35,26 @@ func TestDelKey(t *testing.T) {
 	}
 }
 
-func TestGarbageCollection(t *testing.T) {
+func TestGlobalTTL(t *testing.T) {
 	kv := New(context.Background(), time.Second)
 
 	kv.Put("test", []byte(`hello`))
+
+	if _, ok := kv.Get("test"); !ok {
+		t.Fatalf("unexpected missing key")
+	}
+
+	time.Sleep((100 * time.Millisecond) + time.Second)
+
+	if v, ok := kv.Get("test"); ok {
+		t.Fatalf("expected key to have been garbage collected, found: %s", string(v))
+	}
+}
+
+func TestPerKeyTTL(t *testing.T) {
+	kv := New(context.Background(), 0)
+
+	kv.PutWithTTL("test", []byte(`hello`), time.Second)
 
 	if _, ok := kv.Get("test"); !ok {
 		t.Fatalf("unexpected missing key")
