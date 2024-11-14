@@ -1,11 +1,13 @@
 package cache
 
 import (
+	"context"
 	"testing"
+	"time"
 )
 
 func TestPutGetKey(t *testing.T) {
-	kv := New()
+	kv := New(context.Background(), 0)
 
 	kv.Put("test", []byte(`hello`))
 
@@ -20,7 +22,7 @@ func TestPutGetKey(t *testing.T) {
 }
 
 func TestDelKey(t *testing.T) {
-	kv := New()
+	kv := New(context.Background(), 0)
 
 	kv.Put("test", []byte(`hello`))
 	if _, ok := kv.Get("test"); !ok {
@@ -30,5 +32,21 @@ func TestDelKey(t *testing.T) {
 	kv.Del("test")
 	if _, ok := kv.Get("test"); ok {
 		t.Fatalf("expected key to be deleted")
+	}
+}
+
+func TestGarbageCollection(t *testing.T) {
+	kv := New(context.Background(), time.Second)
+
+	kv.Put("test", []byte(`hello`))
+
+	if _, ok := kv.Get("test"); !ok {
+		t.Fatalf("unexpected missing key")
+	}
+
+	time.Sleep((100 * time.Millisecond) + time.Second)
+
+	if v, ok := kv.Get("test"); ok {
+		t.Fatalf("expected key to have been garbage collected, found: %s", string(v))
 	}
 }
