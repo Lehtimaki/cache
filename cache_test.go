@@ -54,7 +54,7 @@ func TestGlobalTTL(t *testing.T) {
 func TestPerKeyTTL(t *testing.T) {
 	kv := New(context.Background(), 0)
 
-	kv.PutWithTTL("test", []byte(`hello`), time.Second)
+	kv.Put("test", []byte(`hello`), WithTTL(time.Second))
 
 	if _, ok := kv.Get("test"); !ok {
 		t.Fatalf("unexpected missing key")

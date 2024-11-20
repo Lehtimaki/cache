@@ -6,84 +6,72 @@ import (
 	"time"
 )
 
-type Cache interface {
-	Put(string, []byte)
-	PutWithTTL(string, []byte, time.Duration)
-	Get(string) ([]byte, bool)
-	Del(string)
-}
-
-type cache struct {
+type Bucket struct {
 	ttl  time.Duration
 
 	mu    sync.RWMutex
-	store map[string]cell
+	store map[string]item
 }
 
-type cell struct {
+type item struct {
 	value []byte
 	ts    time.Time
 	ttl   time.Duration
 }
 
-func New(ctx context.Context, ttl time.Duration) Cache {
-	c := cache{
+func New(ctx context.Context, ttl time.Duration) *Bucket {
+	b := Bucket{
 		ttl:   ttl,
-		store: map[string]cell{},
+		store: map[string]item{},
 	}
 
-	go c.gc(ctx, time.NewTicker(time.Second))
+	go b.gc(ctx, time.NewTicker(time.Second))
 
-	return &c
+	return &b
 }
 
-func (c *cache) Put(k string, v []byte) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.store[k] = cell{
+func (b *Bucket) Put(k string, v []byte, opts ...Option) {
+	c := item{
 		value: v,
 		ts:    time.Now(),
 	}
-}
 
-func (c *cache) PutWithTTL(k string, v []byte, t time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.store[k] = cell{
-		value: v,
-		ts:    time.Now(),
-		ttl:   t,
+	for _, opt := range opts {
+		opt(&c)
 	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.store[k] = c
 }
 
-func (c *cache) Get(k string) ([]byte, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+func (b *Bucket) Get(k string) ([]byte, bool) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
-	if v, ok := c.store[k]; ok {
-		return v.value, true
+	if i, ok := b.store[k]; ok {
+		return i.value, true
 	}
 
 	return []byte{}, false
 }
 
-func (c *cache) Del(k string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (b *Bucket) Del(k string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
-	delete(c.store, k)
+	delete(b.store, k)
 }
 
-func (c *cache) gc(ctx context.Context, t *time.Ticker) {
+func (b *Bucket) gc(ctx context.Context, t *time.Ticker) {
 	defer t.Stop()
 
 	for {
 		select {
 		case <-t.C:
-			if keys, exp := c.collect(); exp {
-				c.reclaim(keys)
+			if keys, exp := b.collect(); exp {
+				b.reclaim(keys)
 			}
 		case <-ctx.Done():
 			break
@@ -91,19 +79,19 @@ func (c *cache) gc(ctx context.Context, t *time.Ticker) {
 	}
 }
 
-func (c *cache) collect() ([]string, bool) {
+func (b *Bucket) collect() ([]string, bool) {
 	exp := []string{}
 
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
 	now := time.Now()
-	for k, v := range c.store {
+	for k, v := range b.store {
 		ttl := time.Duration(0)
 		if v.ttl != 0 {
 			ttl = v.ttl
 		} else {
-			ttl = c.ttl
+			ttl = b.ttl
 		}
 
 		if now.Sub(v.ts) > ttl {
@@ -114,11 +102,11 @@ func (c *cache) collect() ([]string, bool) {
 	return exp, len(exp) > 0
 }
 
-func (c *cache) reclaim(keys []string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (b *Bucket) reclaim(keys []string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
 	for _, k := range keys {
-		delete(c.store, k)
+		delete(b.store, k)
 	}
 }
