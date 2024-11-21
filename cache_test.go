@@ -36,6 +36,8 @@ func TestDelKey(t *testing.T) {
 }
 
 func TestGlobalTTL(t *testing.T) {
+	t.Parallel()
+
 	kv := New(context.Background(), time.Second)
 
 	kv.Put("test", []byte(`hello`))
@@ -52,6 +54,8 @@ func TestGlobalTTL(t *testing.T) {
 }
 
 func TestPerKeyTTL(t *testing.T) {
+	t.Parallel()
+
 	kv := New(context.Background(), 0)
 
 	kv.Put("test", []byte(`hello`), WithTTL(time.Second))

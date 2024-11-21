@@ -2,10 +2,10 @@ package cache
 
 import "time"
 
-type Option func(*item)
+type Option func(*Item)
 
-func WithTTL(ttl time.Duration) func(*item) {
-	return func(c *item) {
+func WithTTL(ttl time.Duration) Option {
+	return func(c *Item) {
 		c.ttl = ttl
 	}
 }
